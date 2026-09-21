@@ -13,7 +13,7 @@ pipeline {
             steps {
                 checkout scm
                 echo "Selected Git commit:"
-                sh 'git rev-parse HEAD'
+                bat 'git rev-parse HEAD'
             }
         }
 
