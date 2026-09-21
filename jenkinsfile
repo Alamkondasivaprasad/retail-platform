@@ -52,7 +52,7 @@ pipeline {
             steps {
                 echo "Building Docker image..."
 
-                bat "docker build -t retail-app:${params.VERSION} ."
+                bat "\"C:\\Users\\Administrator\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe\" build -t retail-app:${params.VERSION} ."
             }
         }
 
@@ -60,7 +60,7 @@ pipeline {
             steps {
                 echo "Checking Docker image..."
 
-                bat "docker images retail-app:${params.VERSION}"
+                bat "\"C:\\Users\\Administrator\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe\" images retail-app:${params.VERSION}"
             }
         }
     }
