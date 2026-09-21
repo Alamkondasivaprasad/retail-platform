@@ -16,7 +16,7 @@ pipeline {
 
         string(
             name: 'VERSION',
-            defaultValue: '4.2.1',
+            defaultValue: '4.2.2',
             description: 'Application version'
         )
 
@@ -38,10 +38,25 @@ pipeline {
             }
         }
 
-        stage('Validate') {
+        stage('Production Guard') {
+            when {
+                expression {
+                    params.ENVIRONMENT == 'PRODUCTION'
+                }
+            }
             steps {
-                echo "Deployment Action: ${params.DEPLOYMENT_ACTION}"
+                script {
+                    if (params.CONFIRM_PROD != 'YES') {
+                        error("PRODUCTION deployment blocked: CONFIRM_PROD must be YES")
+                    }
+                }
+            }
+        }
+
+        stage('Validate Version') {
+            steps {
                 echo "Environment: ${params.ENVIRONMENT}"
+                echo "Action: ${params.DEPLOYMENT_ACTION}"
                 echo "Version: ${params.VERSION}"
 
                 bat "git rev-parse refs/tags/v${params.VERSION}"
@@ -50,7 +65,7 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                echo "Building Docker image..."
+                echo "Building retail-app:${params.VERSION}"
 
                 bat "\"C:\\Users\\Administrator\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe\" build -t retail-app:${params.VERSION} ."
             }
@@ -58,10 +73,67 @@ pipeline {
 
         stage('Docker Image Check') {
             steps {
-                echo "Checking Docker image..."
-
                 bat "\"C:\\Users\\Administrator\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe\" images retail-app:${params.VERSION}"
             }
+        }
+
+        stage('Start Candidate') {
+            when {
+                expression {
+                    params.DEPLOYMENT_ACTION == 'DEPLOY'
+                }
+            }
+            steps {
+                echo "Starting candidate version ${params.VERSION}"
+
+                bat "\"C:\\Users\\Administrator\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe\" rm -f retail-app-candidate 2>NUL || exit /b 0"
+
+                bat "\"C:\\Users\\Administrator\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe\" run -d --name retail-app-candidate -p 8082:80 retail-app:${params.VERSION}"
+            }
+        }
+
+        stage('Health Check') {
+            when {
+                expression {
+                    params.DEPLOYMENT_ACTION == 'DEPLOY'
+                }
+            }
+            steps {
+                script {
+                    echo "Waiting for candidate health check..."
+
+                    bat 'timeout /t 25 /nobreak'
+
+                    def health = bat(
+                        script: '@docker inspect --format="{{.State.Health.Status}}" retail-app-candidate',
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Candidate health status: ${health}"
+
+                    if (!health.contains("healthy")) {
+                        error("HEALTH CHECK FAILED for version ${params.VERSION}")
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "DEPLOYMENT FAILED - Starting automatic rollback..."
+
+            bat "\"C:\\Users\\Administrator\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe\" rm -f retail-app-candidate 2>NUL || exit /b 0"
+
+            bat "\"C:\\Users\\Administrator\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe\" start retail-app-uat 2>NUL || exit /b 0"
+
+            echo "Previous version 4.2.1 restored."
+
+            bat "\"C:\\Users\\Administrator\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe\" ps"
+        }
+
+        success {
+            echo "DEPLOYMENT SUCCESSFUL"
         }
     }
 }
