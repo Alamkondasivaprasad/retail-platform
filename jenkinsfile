@@ -2,16 +2,37 @@ pipeline {
     agent any
 
     parameters {
-        choice(name: 'DEPLOYMENT_ACTION', choices: ['DEPLOY', 'ROLLBACK'], description: 'Choose deployment action')
-        choice(name: 'ENVIRONMENT', choices: ['UAT', 'PRODUCTION'], description: 'Choose environment')
-        string(name: 'VERSION', defaultValue: '4.2.1', description: 'Application version')
-        choice(name: 'CONFIRM_PROD', choices: ['NO', 'YES'], description: 'Production confirmation')
+        choice(
+            name: 'DEPLOYMENT_ACTION',
+            choices: ['DEPLOY', 'ROLLBACK'],
+            description: 'Choose deployment action'
+        )
+
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['UAT', 'PRODUCTION'],
+            description: 'Choose environment'
+        )
+
+        string(
+            name: 'VERSION',
+            defaultValue: '4.2.1',
+            description: 'Application version'
+        )
+
+        choice(
+            name: 'CONFIRM_PROD',
+            choices: ['NO', 'YES'],
+            description: 'Production confirmation'
+        )
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 checkout scm
+
                 echo "Selected Git commit:"
                 bat 'git rev-parse HEAD'
             }
@@ -22,6 +43,24 @@ pipeline {
                 echo "Deployment Action: ${params.DEPLOYMENT_ACTION}"
                 echo "Environment: ${params.ENVIRONMENT}"
                 echo "Version: ${params.VERSION}"
+
+                bat "git rev-parse refs/tags/v${params.VERSION}"
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                echo "Building Docker image..."
+
+                bat "docker build -t retail-app:${params.VERSION} ."
+            }
+        }
+
+        stage('Docker Image Check') {
+            steps {
+                echo "Checking Docker image..."
+
+                bat "docker images retail-app:${params.VERSION}"
             }
         }
     }
